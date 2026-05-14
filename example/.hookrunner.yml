@@ -1,0 +1,22 @@
+# Example hookrunner configuration
+# Place a .hookrunner.yml in the root of your repository.
+#
+# Shareable configs can be referenced via the 'extends' key (future feature).
+# extends: https://example.com/shared-hooks.yml
+
+hooks:
+  # Runs before every commit
+  pre-commit:
+    - ruff check .
+    - ruff format --check .
+    - mypy src/
+
+  # Runs before a push to the remote
+  pre-push:
+    - pytest --tb=short -q
+
+  # Runs after a successful commit message is written
+  commit-msg:
+    # Commands can also be mappings for named steps (planned feature)
+    - name: Validate commit message format
+      run: python scripts/check_commit_msg.py "$1"
