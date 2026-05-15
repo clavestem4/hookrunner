@@ -1,27 +1,34 @@
-"""Hook runner module: executes git hooks defined in the config."""
+"""hookrunner.runner — Execute hook commands defined in config."""
 
-import os
+from __future__ import annotations
+
 import subprocess
 import sys
-from typing import Optional
+from typing import List, Optional
 
-from hookrunner.config import load_config, find_config_file, ConfigError
+from hookrunner.config import ConfigError, find_config_file, load_config, validate_config
+from hookrunner.filter import should_run_hook
 
 
 class HookRunnerError(Exception):
-    """Raised when a hook execution fails."""
+    """Raised when a hook command fails or the runner encounters an error."""
 
 
-def run_hook(hook_name: str, config_path: Optional[str] = None) -> int:
+def run_hook(
+    hook_name: str,
+    branch: Optional[str] = None,
+    staged_files: Optional[List[str]] = None,
+) -> int:
+    """Run all commands for *hook_name*.
+
+    Applies any ``filter`` block defined on the hook before executing commands.
+    Returns the number of commands that were executed successfully.
+
+    Raises:
+        HookRunnerError: if no config file is found, config is invalid, or a
+            command exits with a non-zero status.
     """
-    Execute all commands defined for the given hook name.
-
-    Returns the exit code (0 for success, non-zero for failure).
-    Raises HookRunnerError if the config cannot be loaded.
-    """
-    if config_path is None:
-        config_path = find_config_file()
-
+    config_path = find_config_file()
     if config_path is None:
         raise HookRunnerError(
             "No .hookrunner.yml config file found in current or parent directories."
@@ -29,37 +36,33 @@ def run_hook(hook_name: str, config_path: Optional[str] = None) -> int:
 
     try:
         config = load_config(config_path)
+        validate_config(config)
     except ConfigError as exc:
-        raise HookRunnerError(f"Failed to load config: {exc}") from exc
+        raise HookRunnerError(str(exc)) from exc
 
     hooks = config.get("hooks", {})
-    commands = hooks.get(hook_name, [])
+    hook_config = hooks.get(hook_name, {})
+    commands: List[str] = hook_config.get("commands", [])
 
     if not commands:
-        # No commands defined for this hook — treat as success
         return 0
 
-    for command in commands:
-        result = _run_command(command)
-        if result != 0:
-            print(
-                f"[hookrunner] Hook '{hook_name}' failed on command: {command}",
-                file=sys.stderr,
+    if not should_run_hook(hook_config, branch=branch, staged_files=staged_files):
+        return 0
+
+    succeeded = 0
+    for cmd in commands:
+        return_code = _run_command(cmd)
+        if return_code != 0:
+            raise HookRunnerError(
+                f"Hook '{hook_name}': command exited with code {return_code}: {cmd}"
             )
-            return result
+        succeeded += 1
 
-    return 0
+    return succeeded
 
 
-def _run_command(command: str) -> int:
-    """Run a shell command and return its exit code."""
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            env=os.environ.copy(),
-        )
-        return result.returncode
-    except OSError as exc:
-        print(f"[hookrunner] Error running command '{command}': {exc}", file=sys.stderr)
-        return 1
+def _run_command(cmd: str) -> int:
+    """Run *cmd* in a shell and return its exit code."""
+    result = subprocess.run(cmd, shell=True)
+    return result.returncode

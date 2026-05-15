@@ -1,29 +1,37 @@
-# Example hookrunner configuration
-# Demonstrates per-hook retry settings alongside standard command lists.
+# Example hookrunner configuration with filter support
 
 shared:
-  - ./shared-hooks.yml
+  - https://example.com/team-hooks.yml  # optional remote shared config
+
+env:
+  NODE_ENV: development
 
 hooks:
   pre-commit:
-    retry_attempts: 2
-    retry_delay: 0.5
-    retry_backoff: 1.0
+    filter:
+      branches:
+        - main
+        - "release/*"
+      files:
+        - "*.py"
+        - "*.js"
+      env:
+        CI: "false"
     commands:
-      - run: flake8 .
-        label: "Lint with flake8"
-      - run: mypy hookrunner
-        label: "Type-check with mypy"
-
-  pre-push:
-    retry_attempts: 3
-    retry_delay: 1.0
-    retry_backoff: 2.0
-    commands:
-      - run: pytest --tb=short
-        label: "Run test suite"
+      - flake8 .
+      - pytest --tb=short
 
   commit-msg:
     commands:
-      - run: python scripts/check_commit_msg.py "$1"
-        label: "Validate commit message format"
+      - python scripts/check_commit_msg.py "$1"
+
+  pre-push:
+    filter:
+      branches:
+        - main
+    retry:
+      attempts: 2
+      delay: 1
+    commands:
+      - pytest --tb=short
+      - mypy hookrunner/
