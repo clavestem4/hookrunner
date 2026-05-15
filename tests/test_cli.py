@@ -37,6 +37,13 @@ def test_build_parser_run():
     assert args.hook == "pre-commit"
 
 
+def test_build_parser_no_command_exits():
+    """Verify that invoking the parser with no subcommand raises SystemExit."""
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args([])
+
+
 def test_main_install_success(tmp_path):
     hooks_dir = tmp_path / ".git" / "hooks"
     hooks_dir.mkdir(parents=True)
@@ -84,5 +91,14 @@ def test_main_returns_1_on_hook_runner_error(tmp_path):
     with patch("hookrunner.cli.run_hook", side_effect=HookRunnerError("hook failed")), \
          patch("hookrunner.cli.Path.cwd", return_value=tmp_path):
         result = main(["run", "pre-commit"])
+
+    assert result == 1
+
+
+def test_main_uninstall_returns_1_on_installer_error(tmp_path):
+    """Verify that an InstallerError during uninstall is handled and returns 1."""
+    with patch("hookrunner.cli.find_git_hooks_dir", side_effect=InstallerError("no git repo")), \
+         patch("hookrunner.cli.Path.cwd", return_value=tmp_path):
+        result = main(["uninstall", "--hooks", "pre-commit"])
 
     assert result == 1
