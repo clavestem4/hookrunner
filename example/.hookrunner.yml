@@ -1,22 +1,29 @@
 # Example hookrunner configuration
-# Place a .hookrunner.yml in the root of your repository.
-#
-# Shareable configs can be referenced via the 'extends' key (future feature).
-# extends: https://example.com/shared-hooks.yml
+# Demonstrates per-hook retry settings alongside standard command lists.
+
+shared:
+  - ./shared-hooks.yml
 
 hooks:
-  # Runs before every commit
   pre-commit:
-    - ruff check .
-    - ruff format --check .
-    - mypy src/
+    retry_attempts: 2
+    retry_delay: 0.5
+    retry_backoff: 1.0
+    commands:
+      - run: flake8 .
+        label: "Lint with flake8"
+      - run: mypy hookrunner
+        label: "Type-check with mypy"
 
-  # Runs before a push to the remote
   pre-push:
-    - pytest --tb=short -q
+    retry_attempts: 3
+    retry_delay: 1.0
+    retry_backoff: 2.0
+    commands:
+      - run: pytest --tb=short
+        label: "Run test suite"
 
-  # Runs after a successful commit message is written
   commit-msg:
-    # Commands can also be mappings for named steps (planned feature)
-    - name: Validate commit message format
-      run: python scripts/check_commit_msg.py "$1"
+    commands:
+      - run: python scripts/check_commit_msg.py "$1"
+        label: "Validate commit message format"
