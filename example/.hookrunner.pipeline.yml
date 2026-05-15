@@ -1,0 +1,39 @@
+# Example hookrunner pipeline configuration
+# Demonstrates per-stage abort_on_failure and dict-style command entries.
+
+extends: null
+
+env:
+  global:
+    CI: "false"
+
+hooks:
+  pre-commit:
+    abort_on_failure: true
+    commands:
+      - name: lint
+        run: "flake8 hookrunner tests"
+        abort_on_failure: true
+      - name: type-check
+        run: "mypy hookrunner --ignore-missing-imports"
+        abort_on_failure: false
+      - name: tests
+        run: "pytest tests/ -q"
+        abort_on_failure: true
+
+  pre-push:
+    abort_on_failure: true
+    commands:
+      - name: full-test-suite
+        run: "pytest tests/ -v"
+        abort_on_failure: true
+      - name: build-check
+        run: "python -m build --no-isolation"
+        abort_on_failure: false
+
+  commit-msg:
+    abort_on_failure: true
+    commands:
+      - name: conventional-commit
+        run: "grep -qE '^(feat|fix|chore|docs|test|refactor|style|ci)(\\(.+\\))?: .+' $1"
+        abort_on_failure: true
