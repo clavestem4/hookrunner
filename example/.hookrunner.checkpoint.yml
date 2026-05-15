@@ -1,0 +1,22 @@
+# Example hookrunner config demonstrating checkpoint / resume behaviour.
+# If a hook run is interrupted (e.g. Ctrl-C or machine restart) hookrunner
+# can skip already-completed commands on the next invocation.
+
+checkpoint:
+  enabled: true          # write checkpoint files to .hookrunner_checkpoints/
+  resume: true           # on next run, skip commands that already passed
+  clear_on_success: true # remove checkpoint file after a fully successful run
+
+hooks:
+  pre-commit:
+    checkpoint: true     # per-hook override (inherits global when omitted)
+    commands:
+      - black --check .
+      - ruff check .
+      - mypy hookrunner
+      - pytest tests/ -q
+
+  pre-push:
+    checkpoint: false    # disable checkpointing for this hook
+    commands:
+      - pytest tests/ --tb=short
