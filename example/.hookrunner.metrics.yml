@@ -1,0 +1,25 @@
+# Example hookrunner config demonstrating metrics integration
+# Metrics are collected automatically during hook execution.
+# Use `hookrunner run --metrics-summary` to print a summary after all hooks.
+
+hooks:
+  pre-commit:
+    commands:
+      - flake8 hookrunner/
+      - mypy hookrunner/
+      - pytest tests/ -q
+
+  pre-push:
+    commands:
+      - pytest tests/ --tb=short
+
+# Metrics configuration block (optional)
+metrics:
+  # Print a per-hook duration table after each run
+  print_summary: true
+
+  # Warn when any single command exceeds this duration (seconds)
+  slow_command_threshold: 10
+
+  # Warn when total hook duration exceeds this threshold (seconds)
+  slow_hook_threshold: 30
