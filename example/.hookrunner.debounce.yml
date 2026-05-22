@@ -1,0 +1,26 @@
+# hookrunner debounce example configuration
+# Prevents hooks from firing repeatedly within a short window,
+# useful when editors trigger Git hooks on rapid saves.
+
+# Global debounce window in seconds (applies to all hooks unless overridden)
+debounce:
+  window: 3
+
+hooks:
+  pre-commit:
+    # Override: allow pre-commit to fire at most once every 5 seconds
+    debounce: 5
+    commands:
+      - ruff check .
+      - mypy hookrunner/
+
+  pre-push:
+    # Inherit global window (3 s)
+    commands:
+      - pytest --tb=short -q
+
+  commit-msg:
+    # Disable debounce for commit-msg by setting window to 0
+    debounce: 0
+    commands:
+      - python scripts/check_commit_msg.py "$1"
