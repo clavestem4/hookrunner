@@ -1,0 +1,26 @@
+# hookrunner circuit breaker example
+# Stops running a hook after repeated consecutive failures,
+# and automatically resets after a cooldown period.
+
+circuit_breaker:
+  # Number of consecutive failures before the circuit opens (hook is skipped).
+  threshold: 3
+  # Seconds to wait before automatically resetting the circuit (half-open).
+  reset_after: 300
+
+hooks:
+  pre-commit:
+    # Circuit breaker is enabled per-hook; overrides global settings.
+    circuit_breaker:
+      threshold: 2
+      reset_after: 120
+    commands:
+      - npm run lint
+      - npm test
+
+  pre-push:
+    circuit_breaker:
+      threshold: 5
+      reset_after: 600
+    commands:
+      - ./scripts/run_integration_tests.sh
