@@ -1,0 +1,34 @@
+# Example hookrunner configuration demonstrating per-hook execution quotas.
+#
+# The quota feature prevents a hook from being triggered more than `limit`
+# times within a rolling `window` (in seconds).  This is useful for
+# expensive hooks (e.g. full test suites) that should not run on every
+# rapid-fire commit in a short burst.
+
+# Global quota applied to every hook unless overridden.
+quota:
+  limit: 10          # maximum executions allowed within the window
+  window: 3600       # rolling window in seconds (1 hour)
+
+hooks:
+  pre-commit:
+    commands:
+      - ruff check .
+      - mypy hookrunner/
+    # Override the global quota for this expensive hook.
+    quota:
+      limit: 5
+      window: 1800   # 30-minute window
+
+  commit-msg:
+    commands:
+      - python scripts/validate_commit_msg.py "$1"
+    # Inherits the global quota (10 runs per hour).
+
+  pre-push:
+    commands:
+      - pytest --tb=short
+    # Very restrictive quota: at most 2 full test runs per hour.
+    quota:
+      limit: 2
+      window: 3600
