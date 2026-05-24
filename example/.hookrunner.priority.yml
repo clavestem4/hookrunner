@@ -1,0 +1,37 @@
+# Example hookrunner config demonstrating command priority ordering.
+#
+# Commands within a hook run in descending priority order (highest first).
+# Priority must be an integer between 0 and 100; defaults to 50.
+# An optional min_priority threshold (global or per-hook) skips commands
+# whose priority falls below the threshold.
+
+# Global minimum priority — commands below this level are skipped everywhere.
+min_priority: 20
+
+hooks:
+  pre-commit:
+    # Hook-level override: only run commands with priority >= 30 for this hook.
+    min_priority: 30
+    commands:
+      - run: "python -m pytest --tb=short -q"
+        priority: 90          # runs first — critical test suite
+
+      - run: "ruff check ."
+        priority: 70          # runs second — linting
+
+      - run: "mypy hookrunner"
+        priority: 50          # runs third — type checking (default priority)
+
+      - run: "echo 'optional: checking docs build'"
+        priority: 25          # low-priority, still above hook min_priority=30? No — skipped
+
+      - run: "echo 'very optional task'"
+        priority: 10          # below both global (20) and hook (30) thresholds — skipped
+
+  pre-push:
+    commands:
+      - run: "python -m pytest -x"
+        priority: 80
+
+      - run: "echo 'pre-push housekeeping'"
+        # no priority key — defaults to 50
