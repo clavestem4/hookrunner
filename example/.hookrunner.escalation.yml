@@ -1,0 +1,40 @@
+# .hookrunner.escalation.yml
+# Example showing per-hook failure escalation policies.
+#
+# Escalation levels:
+#   warn  — log a warning and continue running remaining commands
+#   error — abort the current hook (default)
+#   fatal — abort immediately and exit with a non-zero code regardless
+#           of any other hook configuration
+
+# Global fallback: treat any unhandled failure as a hard error.
+on_failure: error
+
+hooks:
+  pre-commit:
+    # Lint failures are warnings only; don't block the commit.
+    on_failure: warn
+    commands:
+      - name: run linter
+        run: flake8 .
+        on_failure: warn
+      - name: run type checker
+        run: mypy hookrunner
+        # Inherits hook-level "warn" — type errors won't block commit.
+
+  commit-msg:
+    # A malformed commit message is always a fatal error.
+    on_failure: fatal
+    commands:
+      - name: validate commit message
+        run: python scripts/check_commit_msg.py .git/COMMIT_EDITMSG
+
+  pre-push:
+    # Default (error) — abort push on first failure.
+    commands:
+      - name: run test suite
+        run: pytest -q
+      - name: check coverage threshold
+        run: pytest --cov=hookrunner --cov-fail-under=90
+        # Override to warn so a coverage dip doesn't block a push.
+        on_failure: warn
