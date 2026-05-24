@@ -1,0 +1,36 @@
+# Example: hookrunner dependency ordering
+#
+# Commands can declare `depends_on` to ensure they run after named siblings.
+# hookrunner will topologically sort commands within a hook before execution.
+
+hooks:
+  pre-push:
+    commands:
+      - name: type-check
+        run: mypy hookrunner
+        depends_on:
+          - install-deps
+
+      - name: test
+        run: pytest --tb=short
+        depends_on:
+          - type-check
+          - lint
+
+      - name: lint
+        run: flake8 hookrunner tests
+        depends_on:
+          - install-deps
+
+      - name: install-deps
+        run: pip install -e .[dev] -q
+
+  pre-commit:
+    commands:
+      - name: format-check
+        run: black --check hookrunner
+
+      - name: lint
+        run: flake8 hookrunner
+        depends_on:
+          - format-check

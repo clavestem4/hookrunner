@@ -1,68 +1,85 @@
-"""hookrunner.runner — Execute hook commands defined in config."""
+"""Core hook runner — loads config, resolves command order, and executes commands."""
 
 from __future__ import annotations
 
 import subprocess
-import sys
 from typing import List, Optional
 
-from hookrunner.config import ConfigError, find_config_file, load_config, validate_config
-from hookrunner.filter import should_run_hook
+from hookrunner.config import ConfigError, find_config_file, load_config
+from hookrunner.dependency import DependencyError, resolve_command_order
 
 
 class HookRunnerError(Exception):
-    """Raised when a hook command fails or the runner encounters an error."""
+    """Raised when hook execution fails."""
+
+
+def _run_command(command: str, env: Optional[dict] = None) -> subprocess.CompletedProcess:
+    """Run *command* in a shell and return the completed-process object."""
+    return subprocess.run(
+        command,
+        shell=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
 
 
 def run_hook(
     hook_name: str,
-    branch: Optional[str] = None,
-    staged_files: Optional[List[str]] = None,
-) -> int:
-    """Run all commands for *hook_name*.
+    *,
+    config_path: Optional[str] = None,
+    env: Optional[dict] = None,
+) -> List[subprocess.CompletedProcess]:
+    """Execute all commands registered for *hook_name*.
 
-    Applies any ``filter`` block defined on the hook before executing commands.
-    Returns the number of commands that were executed successfully.
+    Commands are sorted according to any ``depends_on`` declarations before
+    execution.  Raises :class:`HookRunnerError` on the first non-zero exit.
 
-    Raises:
-        HookRunnerError: if no config file is found, config is invalid, or a
-            command exits with a non-zero status.
+    Parameters
+    ----------
+    hook_name:
+        Git hook name, e.g. ``"pre-commit"``.
+    config_path:
+        Explicit path to a ``.hookrunner.yml`` file.  When *None* the file is
+        searched for automatically.
+    env:
+        Optional environment mapping forwarded to every subprocess.
     """
-    config_path = find_config_file()
+    if config_path is None:
+        config_path = find_config_file()
     if config_path is None:
         raise HookRunnerError(
-            "No .hookrunner.yml config file found in current or parent directories."
+            "No .hookrunner.yml config file found in current directory or any parent."
         )
 
     try:
         config = load_config(config_path)
-        validate_config(config)
     except ConfigError as exc:
         raise HookRunnerError(str(exc)) from exc
 
     hooks = config.get("hooks", {})
     hook_config = hooks.get(hook_name, {})
-    commands: List[str] = hook_config.get("commands", [])
+    commands: list = hook_config.get("commands", [])
 
     if not commands:
-        return 0
+        return []
 
-    if not should_run_hook(hook_config, branch=branch, staged_files=staged_files):
-        return 0
+    try:
+        ordered = resolve_command_order(hook_config, hook_name=hook_name)
+    except DependencyError as exc:
+        raise HookRunnerError(str(exc)) from exc
 
-    succeeded = 0
-    for cmd in commands:
-        return_code = _run_command(cmd)
-        if return_code != 0:
+    results: List[subprocess.CompletedProcess] = []
+    for cmd in ordered:
+        run_str = cmd if isinstance(cmd, str) else cmd.get("run", "")
+        if not run_str:
+            continue
+        result = _run_command(run_str, env=env)
+        results.append(result)
+        if result.returncode != 0:
             raise HookRunnerError(
-                f"Hook '{hook_name}': command exited with code {return_code}: {cmd}"
+                f"Command failed (exit {result.returncode}): {run_str}\n"
+                f"{result.stderr.strip()}"
             )
-        succeeded += 1
 
-    return succeeded
-
-
-def _run_command(cmd: str) -> int:
-    """Run *cmd* in a shell and return its exit code."""
-    result = subprocess.run(cmd, shell=True)
-    return result.returncode
+    return results
