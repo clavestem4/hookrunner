@@ -1,0 +1,27 @@
+# Example: matrix expansion across Python versions and platforms
+#
+# hookrunner will run each command once per combination of matrix
+# variable values, substituting {variable} placeholders.
+
+hooks:
+  pre-push:
+    matrix:
+      python: ["3.10", "3.11", "3.12"]
+      os: ["linux", "macos"]
+    commands:
+      - "echo Running on {os} with Python {python}"
+      - "tox -e py{python}"
+
+  pre-commit:
+    # Single-axis matrix — useful for iterating over environments
+    matrix:
+      env: ["dev", "staging"]
+    commands:
+      - "./scripts/validate_config.sh --env {env}"
+      - "echo Validated {env} config"
+
+  post-merge:
+    # No matrix — commands run once as normal
+    commands:
+      - "pip install -e ."
+      - "pytest tests/ -q"
