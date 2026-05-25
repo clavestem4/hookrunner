@@ -59,3 +59,17 @@ def log_hook_complete(hook_name: str, passed: bool) -> None:
         logger.info("Hook '%s' completed successfully.", hook_name)
     else:
         logger.error("Hook '%s' completed with errors.", hook_name)
+
+
+def log_skipped_hook(hook_name: str, reason: Optional[str] = None) -> None:
+    """Log that a hook was skipped, with an optional reason.
+
+    Args:
+        hook_name: The name of the hook that was skipped.
+        reason: An optional human-readable explanation for why the hook was skipped.
+    """
+    logger = get_logger()
+    if reason:
+        logger.info("Skipping hook '%s': %s", hook_name, reason)
+    else:
+        logger.info("Skipping hook '%s'.", hook_name)
