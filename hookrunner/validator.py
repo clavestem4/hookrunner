@@ -1,73 +1,86 @@
-"""Hook script validator — checks commands in hook configs for common issues."""
+"""hookrunner.validator – lightweight command-definition validator.
 
-import os
+Checks individual command entries from a hook config and emits
+ValidationWarning objects for suspicious or unknown fields.
+"""
+from __future__ import annotations
+
+import re
 import shutil
-from typing import List, Tuple
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+_KNOWN_KEYS = {
+    "run", "name", "env", "timeout", "retry", "tags", "priority",
+    "depends_on", "condition", "on_branches", "on_files", "glob",
+    "escalation", "cooldown",
+}
 
 
+@dataclass
 class ValidationWarning:
-    def __init__(self, hook: str, command: str, message: str):
-        self.hook = hook
-        self.command = command
-        self.message = message
+    command: str
+    message: str
 
-    def __repr__(self):
-        return f"ValidationWarning(hook={self.hook!r}, command={self.command!r}, message={self.message!r})"
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"ValidationWarning(command={self.command!r}, message={self.message!r})"
 
-    def __str__(self):
-        return f"[{self.hook}] '{self.command}': {self.message}"
+    def __str__(self) -> str:
+        return f"[{self.command}] {self.message}"
 
 
-def _extract_executable(command: str) -> str:
-    """Return the base executable name from a shell command string."""
-    parts = command.strip().split()
-    if not parts:
+def _extract_executable(run: str) -> str:
+    """Return the executable portion of a run string."""
+    if not run:
         return ""
-    # Strip common shell prefixes
-    skip = {"env", "sudo"}
-    for part in parts:
-        if part not in skip:
-            return os.path.basename(part)
-    return os.path.basename(parts[-1])
+    # Strip leading 'env VAR=val …' prefix
+    run = run.strip()
+    parts = run.split()
+    idx = 0
+    while idx < len(parts) and "=" in parts[idx]:
+        idx += 1
+    return parts[idx] if idx < len(parts) else ""
+
+
+def validate_command(
+    command: dict,
+    name: str = "<unnamed>",
+) -> List[ValidationWarning]:
+    """Validate a single command dict and return any warnings found."""
+    warnings: List[ValidationWarning] = []
+
+    # Unknown keys
+    for key in command:
+        if key not in _KNOWN_KEYS:
+            warnings.append(ValidationWarning(name, f"unknown key '{key}'"))
+
+    # Missing 'run'
+    run = command.get("run")
+    if not run:
+        warnings.append(ValidationWarning(name, "missing 'run' field"))
+        return warnings
+
+    if not isinstance(run, str):
+        warnings.append(ValidationWarning(name, "'run' must be a string"))
+        return warnings
+
+    # Executable on PATH check (best-effort)
+    exe = _extract_executable(run)
+    if exe and not exe.startswith((".", "/")) and shutil.which(exe) is None:
+        warnings.append(ValidationWarning(name, f"executable '{exe}' not found on PATH"))
+
+    return warnings
 
 
 def validate_hook_commands(
-    config: dict,
-) -> Tuple[bool, List[ValidationWarning]]:
-    """Validate hook commands in the given config dict.
-
-    Returns (is_valid, warnings) where is_valid is False only when a
-    critical problem is detected (e.g. empty command string).
-    Warnings are issued for executables not found on PATH.
-    """
-    warnings: List[ValidationWarning] = []
-    is_valid = True
-
-    hooks: dict = config.get("hooks", {})
-    for hook_name, commands in hooks.items():
-        if not isinstance(commands, list):
-            warnings.append(
-                ValidationWarning(hook_name, "", "commands must be a list")
-            )
-            is_valid = False
+    commands: list,
+    hook_name: str = "<hook>",
+) -> List[ValidationWarning]:
+    """Validate all commands for a hook and return aggregated warnings."""
+    all_warnings: List[ValidationWarning] = []
+    for cmd in commands:
+        if not isinstance(cmd, dict):
             continue
-
-        for cmd in commands:
-            if not isinstance(cmd, str) or not cmd.strip():
-                warnings.append(
-                    ValidationWarning(hook_name, str(cmd), "command must be a non-empty string")
-                )
-                is_valid = False
-                continue
-
-            exe = _extract_executable(cmd)
-            if exe and shutil.which(exe) is None:
-                warnings.append(
-                    ValidationWarning(
-                        hook_name,
-                        cmd,
-                        f"executable '{exe}' not found on PATH",
-                    )
-                )
-
-    return is_valid, warnings
+        name = cmd.get("name") or hook_name
+        all_warnings.extend(validate_command(cmd, name=name))
+    return all_warnings

@@ -1,0 +1,36 @@
+# Example hookrunner config demonstrating summarizer-friendly setup.
+# Each command has an explicit name so the summary output is readable.
+
+hooks:
+  pre-commit:
+    env:
+      CI: "false"
+    commands:
+      - name: lint
+        run: flake8 .
+        timeout: 30
+        tags: [quality]
+        priority: 10
+
+      - name: type-check
+        run: mypy hookrunner
+        timeout: 60
+        depends_on: [lint]
+        tags: [quality]
+        priority: 5
+
+      - name: unit-tests
+        run: pytest tests/ -q
+        timeout: 120
+        depends_on: [lint]
+        tags: [tests]
+        priority: 1
+
+  commit-msg:
+    commands:
+      - name: message-format
+        run: python scripts/check_commit_msg.py "$1"
+        timeout: 10
+
+# Summarizer output will group warnings per command name and show
+# total elapsed time for the hook alongside per-command timings.
