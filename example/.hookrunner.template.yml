@@ -1,0 +1,36 @@
+# Example: using template variables in hook commands
+# Variables are written as {VAR_NAME} and resolved from the
+# context dict or the current environment at run time.
+
+hooks:
+  pre-commit:
+    env:
+      LINT_TARGET: "."
+      MIN_COVERAGE: "90"
+    commands:
+      - run: "ruff check {LINT_TARGET}"
+        name: ruff-lint
+        tags: [lint]
+
+      - run: "black --check {LINT_TARGET}"
+        name: black-fmt
+        tags: [fmt]
+
+      - run: "pytest --cov={LINT_TARGET} --cov-fail-under={MIN_COVERAGE}"
+        name: pytest-coverage
+        tags: [test]
+
+  pre-push:
+    env:
+      REMOTE: "origin"
+      BRANCH: "main"
+    commands:
+      - run: "git fetch {REMOTE} {BRANCH}"
+        name: fetch-remote
+
+      - run: "git diff --stat {REMOTE}/{BRANCH}"
+        name: diff-stat
+
+# Variables not present in the hook's env block are looked up in
+# the current process environment, allowing CI systems to inject
+# values without modifying this config file.
