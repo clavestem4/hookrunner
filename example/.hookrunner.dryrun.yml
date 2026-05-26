@@ -1,0 +1,29 @@
+# Example hookrunner configuration demonstrating dry-run mode.
+#
+# When dry_run is enabled (globally or per-hook) hookrunner will print
+# what it *would* execute but will not actually run any commands.  This
+# is useful for CI pipelines where you want to audit hook behaviour
+# without side-effects, or for onboarding new contributors.
+
+# Global dry-run flag — affects every hook unless overridden below.
+dry_run: false
+
+hooks:
+  pre-commit:
+    # Override the global flag: always simulate this hook.
+    dry_run: true
+    commands:
+      - black --check .
+      - flake8 hookrunner tests
+      - mypy hookrunner
+
+  pre-push:
+    # Inherits global dry_run (false) — commands will actually run.
+    commands:
+      - pytest --tb=short -q
+
+  commit-msg:
+    # Explicitly disabled even if someone sets global dry_run: true.
+    dry_run: false
+    commands:
+      - python scripts/check_commit_msg.py "$1"
