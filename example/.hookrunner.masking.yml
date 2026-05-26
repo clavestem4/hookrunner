@@ -1,0 +1,26 @@
+# Example hookrunner config demonstrating output masking.
+#
+# 'mask.values' lists literal strings that will be replaced with '***'
+# in any command output or logged environment variables.
+# Hook-level overrides can add extra values scoped to a single hook.
+
+mask:
+  values:
+    - "${API_TOKEN}"        # redact a specific token value
+    - "supersecretpassword" # redact a hardcoded secret
+
+hooks:
+  pre-push:
+    mask:
+      values:
+        - "deploy_key_xyz"  # extra secret only relevant during push
+    commands:
+      - name: validate-token
+        run: echo "Pushing with token ${API_TOKEN}"
+
+  pre-commit:
+    commands:
+      - name: lint
+        run: npm run lint
+      - name: test
+        run: npm test
